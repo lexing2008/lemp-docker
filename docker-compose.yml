@@ -4,19 +4,70 @@ services:
     build:
       context: ./docker/php
     volumes:
-      - './src:/var/www/html'
+      - './tms:/var/www/html'
 
   nginx:
     image: nginx:latest
+    depends_on:
+      - imgproxy
     ports:
       - 80:80
     volumes:
-      - './src:/var/www/html'
+      - './tms:/var/www/html'
       - './docker/nginx/conf.d:/etc/nginx/conf.d'
 
-  mysql:
-    image: mysql:8
-    environment:
-      - MYSQL_ROOT_PASSWORD=root
+  db:
+    image: mariadb:10.3.11
+    restart: on-failure
     volumes:
-      - './docker/volume/mysql:/var/lib/mysql'
+      - './docker/volume/mariadb:/var/lib/mysql'
+    ports:
+      - 3306:3306
+    environment:
+      TZ: "Asia/Bangkok"
+      MYSQL_ROOT_PASSWORD: pass
+      MYSQL_USER: tmsuser
+      MYSQL_PASSWORD: test123
+      MYSQL_DATABASE: tms
+
+  mongodb:
+    image: mongo
+    restart: on-failure
+    volumes:
+      - './docker/volume/mongodb:/data/db'
+    ports:
+      - 27017:27017
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    mem_reservation: 256m
+
+  memcache:
+    image: memcached:alpine
+    ports:
+      - 11211:11211
+
+  redis:
+    image: redis:alpine
+    ports:
+      - 6379:6379
+
+  imgproxy:
+    image: darthsim/imgproxy:v2
+    depends_on:
+      - php
+    volumes:
+      - ./tms:/home:cached
+    environment:
+      - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/home/cache/storage/public/
+      - IMGPROXY_IGNORE_SSL_VERIFICATION=${IMGPROXY_IGNORE_SSL_VERIFICATION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - IMGPROXY_ALLOWED_SOURCES=${IMGPROXY_ALLOWED_SOURCES}
+      - IMGPROXY_DEVELOPMENT_ERRORS_MODE=${IMGPROXY_DEVELOPMENT_ERRORS_MODE}
+      - IMGPROXY_S3_ENDPOINT=${IMGPROXY_S3_ENDPOINT}
+      - IMGPROXY_S3_REGION=${IMGPROXY_S3_REGION}
+      - IMGPROXY_USE_S3=${IMGPROXY_USE_S3}
+    ports:
+      - 8088:8080
